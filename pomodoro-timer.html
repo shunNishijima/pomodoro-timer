@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Focus Flow - Pomodoro Timer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a25;
+            --accent-work: #ff6b4a;
+            --accent-work-glow: rgba(255, 107, 74, 0.4);
+            --accent-break: #4ae8c4;
+            --accent-break-glow: rgba(74, 232, 196, 0.4);
+            --text-primary: #ffffff;
+            --text-secondary: #8a8a9a;
+            --text-muted: #5a5a6a;
+            --spotify-green: #1DB954;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Sora', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Animated background */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(255, 107, 74, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(74, 232, 196, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(100, 100, 150, 0.05) 0%, transparent 70%);
+            z-index: 0;
+            animation: bgPulse 8s ease-in-out infinite;
+        }
+
+        @keyframes bgPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 420px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 28px;
+            padding-bottom: 40px;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            animation: fadeInDown 0.6s ease-out;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .logo {
+            font-family: 'Space Mono', monospace;
+            font-size: 14px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .session-count {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .session-count span {
+            color: var(--accent-work);
+            font-weight: 600;
+        }
+
+        /* Mode Selector */
+        .mode-selector {
+            display: flex;
+            gap: 8px;
+            background: var(--bg-secondary);
+            padding: 6px;
+            border-radius: 16px;
+            animation: fadeIn 0.6s ease-out 0.1s both;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .mode-btn {
+            font-family: 'Sora', sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 12px;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .mode-btn.active {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .mode-btn:hover:not(.active) {
+            color: var(--text-primary);
+        }
+
+        /* Timer Display */
+        .timer-container {
+            position: relative;
+            animation: scaleIn 0.6s ease-out 0.2s both;
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .timer-ring {
+            width: 260px;
+            height: 260px;
+            position: relative;
+        }
+
+        .timer-ring svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .timer-ring circle {
+            fill: none;
+            stroke-width: 6;
+            stroke-linecap: round;
+        }
+
+        .timer-ring .bg-circle {
+            stroke: var(--bg-card);
+        }
+
+        .timer-ring .progress-circle {
+            stroke: var(--accent-work);
+            stroke-dasharray: 754;
+            stroke-dashoffset: 0;
+            transition: stroke-dashoffset 0.5s ease, stroke 0.3s ease;
+            filter: drop-shadow(0 0 12px var(--accent-work-glow));
+        }
+
+        .timer-ring.break .progress-circle {
+            stroke: var(--accent-break);
+            filter: drop-shadow(0 0 12px var(--accent-break-glow));
+        }
+
+        .timer-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .timer-phase {
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--accent-work);
+            margin-bottom: 8px;
+            transition: color 0.3s ease;
+        }
+
+        .timer-ring.break .timer-phase {
+            color: var(--accent-break);
+        }
+
+        .timer-display {
+            font-family: 'Space Mono', monospace;
+            font-size: 58px;
+            font-weight: 700;
+            letter-spacing: -2px;
+            line-height: 1;
+        }
+
+        .timer-subtitle {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 8px;
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 16px;
+            animation: fadeInUp 0.6s ease-out 0.3s both;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .control-btn svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-work) 0%, #ff8a6a 100%);
+            box-shadow: 0 8px 24px var(--accent-work-glow);
+        }
+
+        .btn-primary:hover {
+            transform: scale(1.08);
+            box-shadow: 0 12px 32px var(--accent-work-glow);
+        }
+
+        .btn-primary:active {
+            transform: scale(0.95);
+        }
+
+        .btn-primary.break-mode {
+            background: linear-gradient(135deg, var(--accent-break) 0%, #6af0d4 100%);
+            box-shadow: 0 8px 24px var(--accent-break-glow);
+        }
+
+        .btn-primary.break-mode:hover {
+            box-shadow: 0 12px 32px var(--accent-break-glow);
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-secondary);
+        }
+
+        .btn-secondary:hover {
+            background: #252535;
+            color: var(--text-primary);
+            transform: scale(1.05);
+        }
+
+        .btn-secondary svg {
+            stroke: currentColor;
+        }
+
+        /* Sound Section */
+        .sound-section {
+            width: 100%;
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 20px;
+            animation: fadeInUp 0.6s ease-out 0.4s both;
+        }
+
+        .sound-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .sound-title-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sound-icon {
+            font-size: 20px;
+        }
+
+        .sound-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .master-volume {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .volume-icon {
+            color: var(--text-secondary);
+            font-size: 16px;
+        }
+
+        .master-slider {
+            width: 80px;
+            height: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: var(--bg-secondary);
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .master-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            background: var(--text-primary);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .master-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .sound-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .sound-card {
+            background: var(--bg-secondary);
+            border-radius: 14px;
+            padding: 14px 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            text-align: center;
+        }
+
+        .sound-card:hover {
+            background: #1e1e2a;
+            transform: translateY(-2px);
+        }
+
+        .sound-card.active {
+            border-color: var(--accent-work);
+            background: rgba(255, 107, 74, 0.1);
+        }
+
+        .sound-card.break-active {
+            border-color: var(--accent-break);
+            background: rgba(74, 232, 196, 0.1);
+        }
+
+        .sound-emoji {
+            font-size: 28px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .sound-name {
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .sound-card-slider {
+            width: 100%;
+            height: 3px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: var(--bg-primary);
+            border-radius: 2px;
+            outline: none;
+            margin-top: 10px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .sound-card.active .sound-card-slider,
+        .sound-card.break-active .sound-card-slider {
+            opacity: 1;
+        }
+
+        .sound-card-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 10px;
+            height: 10px;
+            background: var(--accent-work);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .sound-card.break-active .sound-card-slider::-webkit-slider-thumb {
+            background: var(--accent-break);
+        }
+
+        /* Playing indicator */
+        .now-playing {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 16px;
+            padding: 10px;
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .now-playing.hidden {
+            display: none;
+        }
+
+        .sound-wave {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            height: 16px;
+        }
+
+        .sound-wave span {
+            width: 3px;
+            background: var(--accent-work);
+            border-radius: 2px;
+            animation: soundWave 0.8s ease-in-out infinite;
+        }
+
+        .sound-wave span:nth-child(1) { height: 8px; animation-delay: 0s; }
+        .sound-wave span:nth-child(2) { height: 14px; animation-delay: 0.1s; }
+        .sound-wave span:nth-child(3) { height: 10px; animation-delay: 0.2s; }
+        .sound-wave span:nth-child(4) { height: 16px; animation-delay: 0.3s; }
+        .sound-wave span:nth-child(5) { height: 6px; animation-delay: 0.4s; }
+
+        @keyframes soundWave {
+            0%, 100% { transform: scaleY(1); }
+            50% { transform: scaleY(0.5); }
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: var(--bg-card);
+            padding: 16px 24px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .notification.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .notification-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .notification-icon.work {
+            background: var(--accent-work);
+        }
+
+        .notification-icon.break {
+            background: var(--accent-break);
+        }
+
+        .notification-text {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Responsive */
+        @media (max-width: 380px) {
+            .timer-ring {
+                width: 220px;
+                height: 220px;
+            }
+
+            .timer-display {
+                font-size: 48px;
+            }
+
+            .control-btn {
+                width: 52px;
+                height: 52px;
+            }
+
+            .sound-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* PWA Install Banner */
+        .install-banner {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: var(--bg-card);
+            padding: 16px 20px;
+            border-radius: 16px;
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            z-index: 100;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            animation: slideUp 0.4s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .install-banner.show {
+            display: flex;
+        }
+
+        .install-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .install-btn {
+            font-family: 'Sora', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 10px 20px;
+            background: var(--accent-work);
+            color: var(--bg-primary);
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .dismiss-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        /* Audio unlock button */
+        .audio-unlock {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 10, 15, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            gap: 20px;
+        }
+
+        .audio-unlock.hidden {
+            display: none;
+        }
+
+        .unlock-btn {
+            font-family: 'Sora', sans-serif;
+            font-size: 16px;
+            font-weight: 600;
+            padding: 16px 40px;
+            background: linear-gradient(135deg, var(--accent-work) 0%, #ff8a6a 100%);
+            color: white;
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            box-shadow: 0 8px 24px var(--accent-work-glow);
+            transition: transform 0.3s;
+        }
+
+        .unlock-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .unlock-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-align: center;
+            max-width: 280px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Audio Unlock Screen (required for mobile browsers) -->
+    <div class="audio-unlock" id="audioUnlock">
+        <div style="font-size: 48px; margin-bottom: 10px;">🎧</div>
+        <button class="unlock-btn" onclick="unlockAudio()">タップして開始</button>
+        <p class="unlock-text">音声を有効にするには、<br>ボタンをタップしてください</p>
+    </div>
+
+    <div class="bg-gradient"></div>
+    
+    <div class="container">
+        <header class="header">
+            <div class="logo">Focus Flow</div>
+            <div class="session-count">今日のセッション: <span id="sessionCount">0</span></div>
+        </header>
+
+        <div class="mode-selector">
+            <button class="mode-btn active" data-mode="standard" onclick="setTimerMode('standard')">
+                25/5分
+            </button>
+            <button class="mode-btn" data-mode="extended" onclick="setTimerMode('extended')">
+                50/10分
+            </button>
+        </div>
+
+        <div class="timer-container">
+            <div class="timer-ring" id="timerRing">
+                <svg viewBox="0 0 260 260">
+                    <circle class="bg-circle" cx="130" cy="130" r="120"/>
+                    <circle class="progress-circle" id="progressCircle" cx="130" cy="130" r="120"/>
+                </svg>
+                <div class="timer-content">
+                    <div class="timer-phase" id="timerPhase">作業</div>
+                    <div class="timer-display" id="timerDisplay">25:00</div>
+                    <div class="timer-subtitle" id="timerSubtitle">スタートを押して開始</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="control-btn btn-secondary" onclick="resetTimer()" title="リセット">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                    <path d="M3 3v5h5"/>
+                </svg>
+            </button>
+            <button class="control-btn btn-primary" id="mainBtn" onclick="toggleTimer()">
+                <svg viewBox="0 0 24 24" fill="white" id="playIcon">
+                    <polygon points="6,4 20,12 6,20"/>
+                </svg>
+                <svg viewBox="0 0 24 24" fill="white" id="pauseIcon" style="display: none;">
+                    <rect x="6" y="4" width="4" height="16"/>
+                    <rect x="14" y="4" width="4" height="16"/>
+                </svg>
+            </button>
+            <button class="control-btn btn-secondary" onclick="skipPhase()" title="スキップ">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="5,4 15,12 5,20" fill="currentColor"/>
+                    <line x1="19" y1="5" x2="19" y2="19"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="sound-section">
+            <div class="sound-header">
+                <div class="sound-title-group">
+                    <span class="sound-icon">🎵</span>
+                    <span class="sound-title">環境音</span>
+                </div>
+                <div class="master-volume">
+                    <span class="volume-icon">🔊</span>
+                    <input type="range" class="master-slider" id="masterVolume" min="0" max="100" value="50" oninput="setMasterVolume(this.value)">
+                </div>
+            </div>
+            <div class="sound-grid" id="soundGrid">
+                <div class="sound-card" data-sound="rain" onclick="toggleSound('rain')">
+                    <span class="sound-emoji">🌧️</span>
+                    <span class="sound-name">雨</span>
+                    <input type="range" class="sound-card-slider" min="0" max="100" value="70" onclick="event.stopPropagation()" oninput="setSoundVolume('rain', this.value)">
+                </div>
+                <div class="sound-card" data-sound="thunder" onclick="toggleSound('thunder')">
+                    <span class="sound-emoji">⛈️</span>
+                    <span class="sound-name">雷雨</span>
+                    <input type="range" class="sound-card-slider" min="0" max="100" value="70" onclick="event.stopPropagation()" oninput="setSoundVolume('thunder', this.value)">
+                </div>
+                <div class="sound-card" data-sound="ocean" onclick="toggleSound('ocean')">
+                    <span class="sound-emoji">🌊</span>
+                    <span class="sound-name">波</span>
+                    <input type="range" class="sound-card-slider" min="0" max="100" value="70" onclick="event.stopPropagation()" oninput="setSoundVolume('ocean', this.value)">
+                </div>
+                <div class="sound-card" data-sound="fire" onclick="toggleSound('fire')">
+                    <span class="sound-emoji">🔥</span>
+                    <span class="sound-name">焚き火</span>
+                    <input type="range" class="sound-card-slider" min="0" max="100" value="70" onclick="event.stopPropagation()" oninput="setSoundVolume('fire', this.value)">
+                </div>
+                <div class="sound-card" data-sound="forest" onclick="toggleSound('forest')">
+                    <span class="sound-emoji">🌲</span>
+                    <span class="sound-name">森</span>
+                    <input type="range" class="sound-card-slider" min="0" max="100" value="70" onclick="event.stopPropagation()" oninput="setSoundVolume('forest', this.value)">
+                </div>
+                <div class="sound-card" data-sound="wind" onclick="toggleSound('wind')">
+                    <span class="sound-emoji">💨</span>
+                    <span class="sound-name">風</span>
+                    <input type="range" class="sound-card-slider" min="0" max="100" value="70" onclick="event.stopPropagation()" oninput="setSoundVolume('wind', this.value)">
+                </div>
+                <div class="sound-card" data-sound="cafe" onclick="toggleSound('cafe')">
+                    <span class="sound-emoji">☕</span>
+                    <span class="sound-name">カフェ</span>
+                    <input type="range" class="sound-card-slider" min="0" max="100" value="70" onclick="event.stopPropagation()" oninput="setSoundVolume('cafe', this.value)">
+                </div>
+                <div class="sound-card" data-sound="whitenoise" onclick="toggleSound('whitenoise')">
+                    <span class="sound-emoji">📻</span>
+                    <span class="sound-name">ホワイトノイズ</span>
+                    <input type="range" class="sound-card-slider" min="0" max="100" value="70" onclick="event.stopPropagation()" oninput="setSoundVolume('whitenoise', this.value)">
+                </div>
+                <div class="sound-card" data-sound="brownnoise" onclick="toggleSound('brownnoise')">
+                    <span class="sound-emoji">🟤</span>
+                    <span class="sound-name">ブラウンノイズ</span>
+                    <input type="range" class="sound-card-slider" min="0" max="100" value="70" onclick="event.stopPropagation()" oninput="setSoundVolume('brownnoise', this.value)">
+                </div>
+            </div>
+            <div class="now-playing hidden" id="nowPlaying">
+                <div class="sound-wave">
+                    <span></span><span></span><span></span><span></span><span></span>
+                </div>
+                <span id="playingText">再生中</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification">
+        <div class="notification-icon" id="notificationIcon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
+                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+            </svg>
+        </div>
+        <span class="notification-text" id="notificationText"></span>
+    </div>
+
+    <div class="install-banner" id="installBanner">
+        <span class="install-text">ホーム画面に追加してアプリとして使えます</span>
+        <button class="install-btn" id="installBtn">追加</button>
+        <button class="dismiss-btn" onclick="dismissInstall()">✕</button>
+    </div>
+
+    <script>
+        // ============================================
+        // AUDIO ENGINE - Web Audio API Sound Generator
+        // ============================================
+        
+        let audioContext = null;
+        let masterGain = null;
+        let isAudioUnlocked = false;
+        
+        const activeSounds = {};
+        const soundVolumes = {};
+        
+        function unlockAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            masterGain = audioContext.createGain();
+            masterGain.connect(audioContext.destination);
+            masterGain.gain.value = 0.5;
+            
+            // Play a silent buffer to unlock audio
+            const buffer = audioContext.createBuffer(1, 1, 22050);
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContext.destination);
+            source.start(0);
+            
+            isAudioUnlocked = true;
+            document.getElementById('audioUnlock').classList.add('hidden');
+            
+            // Request notification permission
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+        }
+        
+        // Sound Generators
+        const soundGenerators = {
+            rain: function() {
+                const bufferSize = 2 * audioContext.sampleRate;
+                const buffer = audioContext.createBuffer(2, bufferSize, audioContext.sampleRate);
+                
+                for (let channel = 0; channel < 2; channel++) {
+                    const data = buffer.getChannelData(channel);
+                    for (let i = 0; i < bufferSize; i++) {
+                        // Rain: filtered noise with occasional drops
+                        data[i] = (Math.random() * 2 - 1) * 0.3;
+                        if (Math.random() < 0.001) {
+                            data[i] += (Math.random() - 0.5) * 0.8;
+                        }
+                    }
+                }
+                
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.loop = true;
+                
+                const filter = audioContext.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 4000;
+                
+                const filter2 = audioContext.createBiquadFilter();
+                filter2.type = 'highpass';
+                filter2.frequency.value = 200;
+                
+                source.connect(filter);
+                filter.connect(filter2);
+                
+                return { source, output: filter2 };
+            },
+            
+            thunder: function() {
+                const bufferSize = 2 * audioContext.sampleRate;
+                const buffer = audioContext.createBuffer(2, bufferSize, audioContext.sampleRate);
+                
+                for (let channel = 0; channel < 2; channel++) {
+                    const data = buffer.getChannelData(channel);
+                    for (let i = 0; i < bufferSize; i++) {
+                        // Thunder: low rumble with rain
+                        const rain = (Math.random() * 2 - 1) * 0.2;
+                        const rumble = Math.sin(i * 0.0001 * Math.random()) * 0.1;
+                        data[i] = rain + rumble;
+                        if (Math.random() < 0.0005) {
+                            data[i] += (Math.random() - 0.5) * 1.5;
+                        }
+                    }
+                }
+                
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.loop = true;
+                
+                const filter = audioContext.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 2000;
+                
+                source.connect(filter);
+                
+                return { source, output: filter };
+            },
+            
+            ocean: function() {
+                const bufferSize = 4 * audioContext.sampleRate;
+                const buffer = audioContext.createBuffer(2, bufferSize, audioContext.sampleRate);
+                
+                for (let channel = 0; channel < 2; channel++) {
+                    const data = buffer.getChannelData(channel);
+                    for (let i = 0; i < bufferSize; i++) {
+                        // Ocean: waves with varying intensity
+                        const wavePhase = (i / audioContext.sampleRate) * 0.1;
+                        const waveIntensity = (Math.sin(wavePhase) + 1) * 0.5;
+                        const noise = (Math.random() * 2 - 1) * waveIntensity * 0.4;
+                        data[i] = noise;
+                    }
+                }
+                
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.loop = true;
+                
+                const filter = audioContext.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 1500;
+                
+                source.connect(filter);
+                
+                return { source, output: filter };
+            },
+            
+            fire: function() {
+                const bufferSize = 2 * audioContext.sampleRate;
+                const buffer = audioContext.createBuffer(2, bufferSize, audioContext.sampleRate);
+                
+                for (let channel = 0; channel < 2; channel++) {
+                    const data = buffer.getChannelData(channel);
+                    let lastOut = 0;
+                    for (let i = 0; i < bufferSize; i++) {
+                        // Fire: crackling noise
+                        const white = Math.random() * 2 - 1;
+                        lastOut = (lastOut + (0.02 * white)) / 1.02;
+                        data[i] = lastOut * 3;
+                        // Crackles
+                        if (Math.random() < 0.002) {
+                            data[i] += (Math.random() - 0.5) * 0.6;
+                        }
+                    }
+                }
+                
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.loop = true;
+                
+                const filter = audioContext.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.value = 800;
+                filter.Q.value = 0.5;
+                
+                source.connect(filter);
+                
+                return { source, output: filter };
+            },
+            
+            forest: function() {
+                const bufferSize = 4 * audioContext.sampleRate;
+                const buffer = audioContext.createBuffer(2, bufferSize, audioContext.sampleRate);
+                
+                for (let channel = 0; channel < 2; channel++) {
+                    const data = buffer.getChannelData(channel);
+                    for (let i = 0; i < bufferSize; i++) {
+                        // Forest: gentle rustling with occasional bird chirps
+                        let sample = (Math.random() * 2 - 1) * 0.08;
+                        
+                        // Bird chirps (sine waves)
+                        if (Math.random() < 0.0001) {
+                            const chirpLen = Math.min(1000, bufferSize - i);
+                            for (let j = 0; j < chirpLen; j++) {
+                                const freq = 2000 + Math.random() * 2000;
+                                const env = Math.sin(Math.PI * j / chirpLen);
+                                if (i + j < bufferSize) {
+                                    data[i + j] += Math.sin(j * freq / audioContext.sampleRate * Math.PI * 2) * env * 0.1;
+                                }
+                            }
+                        }
+                        data[i] = sample;
+                    }
+                }
+                
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.loop = true;
+                
+                const filter = audioContext.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.value = 2000;
+                filter.Q.value = 0.3;
+                
+                source.connect(filter);
+                
+                return { source, output: filter };
+            },
+            
+            wind: function() {
+                const bufferSize = 4 * audioContext.sampleRate;
+                const buffer = audioContext.createBuffer(2, bufferSize, audioContext.sampleRate);
+                
+                for (let channel = 0; channel < 2; channel++) {
+                    const data = buffer.getChannelData(channel);
+                    for (let i = 0; i < bufferSize; i++) {
+                        // Wind: modulated filtered noise
+                        const mod = Math.sin(i * 0.00005) * 0.5 + 0.5;
+                        data[i] = (Math.random() * 2 - 1) * mod * 0.3;
+                    }
+                }
+                
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.loop = true;
+                
+                const filter = audioContext.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 800;
+                
+                source.connect(filter);
+                
+                return { source, output: filter };
+            },
+            
+            cafe: function() {
+                const bufferSize = 4 * audioContext.sampleRate;
+                const buffer = audioContext.createBuffer(2, bufferSize, audioContext.sampleRate);
+                
+                for (let channel = 0; channel < 2; channel++) {
+                    const data = buffer.getChannelData(channel);
+                    for (let i = 0; i < bufferSize; i++) {
+                        // Cafe: murmur of voices + clinking
+                        let sample = (Math.random() * 2 - 1) * 0.15;
+                        
+                        // Occasional clinks
+                        if (Math.random() < 0.0002) {
+                            const clinkLen = Math.min(500, bufferSize - i);
+                            for (let j = 0; j < clinkLen; j++) {
+                                const env = Math.exp(-j / 100);
+                                if (i + j < bufferSize) {
+                                    data[i + j] += Math.sin(j * 4000 / audioContext.sampleRate * Math.PI * 2) * env * 0.05;
+                                }
+                            }
+                        }
+                        data[i] = sample;
+                    }
+                }
+                
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.loop = true;
+                
+                const filter = audioContext.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.value = 1000;
+                filter.Q.value = 0.5;
+                
+                source.connect(filter);
+                
+                return { source, output: filter };
+            },
+            
+            whitenoise: function() {
+                const bufferSize = 2 * audioContext.sampleRate;
+                const buffer = audioContext.createBuffer(2, bufferSize, audioContext.sampleRate);
+                
+                for (let channel = 0; channel < 2; channel++) {
+                    const data = buffer.getChannelData(channel);
+                    for (let i = 0; i < bufferSize; i++) {
+                        data[i] = Math.random() * 2 - 1;
+                    }
+                }
+                
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.loop = true;
+                
+                const gain = audioContext.createGain();
+                gain.gain.value = 0.3;
+                
+                source.connect(gain);
+                
+                return { source, output: gain };
+            },
+            
+            brownnoise: function() {
+                const bufferSize = 2 * audioContext.sampleRate;
+                const buffer = audioContext.createBuffer(2, bufferSize, audioContext.sampleRate);
+                
+                for (let channel = 0; channel < 2; channel++) {
+                    const data = buffer.getChannelData(channel);
+                    let lastOut = 0;
+                    for (let i = 0; i < bufferSize; i++) {
+                        const white = Math.random() * 2 - 1;
+                        lastOut = (lastOut + (0.02 * white)) / 1.02;
+                        data[i] = lastOut * 3.5;
+                    }
+                }
+                
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.loop = true;
+                
+                return { source, output: source };
+            }
+        };
+        
+        function toggleSound(soundName) {
+            if (!isAudioUnlocked) return;
+            
+            const card = document.querySelector(`[data-sound="${soundName}"]`);
+            const isBreakPhase = !isWorkPhase;
+            
+            if (activeSounds[soundName]) {
+                // Stop sound
+                activeSounds[soundName].source.stop();
+                activeSounds[soundName].gain.disconnect();
+                delete activeSounds[soundName];
+                card.classList.remove('active', 'break-active');
+            } else {
+                // Start sound
+                const generator = soundGenerators[soundName];
+                if (generator) {
+                    const { source, output } = generator();
+                    const gain = audioContext.createGain();
+                    gain.gain.value = (soundVolumes[soundName] || 70) / 100 * 0.7;
+                    
+                    output.connect(gain);
+                    gain.connect(masterGain);
+                    source.start(0);
+                    
+                    activeSounds[soundName] = { source, gain, output };
+                    card.classList.add(isBreakPhase ? 'break-active' : 'active');
+                }
+            }
+            
+            updateNowPlaying();
+        }
+        
+        function setSoundVolume(soundName, value) {
+            soundVolumes[soundName] = value;
+            if (activeSounds[soundName]) {
+                activeSounds[soundName].gain.gain.value = value / 100 * 0.7;
+            }
+        }
+        
+        function setMasterVolume(value) {
+            if (masterGain) {
+                masterGain.gain.value = value / 100;
+            }
+        }
+        
+        function updateNowPlaying() {
+            const nowPlaying = document.getElementById('nowPlaying');
+            const playingText = document.getElementById('playingText');
+            const activeCount = Object.keys(activeSounds).length;
+            
+            if (activeCount > 0) {
+                nowPlaying.classList.remove('hidden');
+                const names = Object.keys(activeSounds).map(s => {
+                    const card = document.querySelector(`[data-sound="${s}"]`);
+                    return card.querySelector('.sound-name').textContent;
+                });
+                playingText.textContent = names.join(' + ') + ' 再生中';
+            } else {
+                nowPlaying.classList.add('hidden');
+            }
+        }
+        
+        function updateSoundCardStyles() {
+            const isBreakPhase = !isWorkPhase;
+            document.querySelectorAll('.sound-card').forEach(card => {
+                const soundName = card.dataset.sound;
+                if (activeSounds[soundName]) {
+                    card.classList.remove('active', 'break-active');
+                    card.classList.add(isBreakPhase ? 'break-active' : 'active');
+                }
+            });
+        }
+
+        // ============================================
+        // TIMER LOGIC
+        // ============================================
+        
+        let timerMode = 'standard';
+        let isWorkPhase = true;
+        let isRunning = false;
+        let timeRemaining = 25 * 60;
+        let totalTime = 25 * 60;
+        let timerInterval = null;
+        let sessionCount = parseInt(localStorage.getItem('pomodoroSessions') || '0');
+
+        const DURATIONS = {
+            standard: { work: 25, break: 5 },
+            extended: { work: 50, break: 10 }
+        };
+
+        const timerDisplay = document.getElementById('timerDisplay');
+        const timerPhase = document.getElementById('timerPhase');
+        const timerSubtitle = document.getElementById('timerSubtitle');
+        const timerRing = document.getElementById('timerRing');
+        const progressCircle = document.getElementById('progressCircle');
+        const mainBtn = document.getElementById('mainBtn');
+        const playIcon = document.getElementById('playIcon');
+        const pauseIcon = document.getElementById('pauseIcon');
+        const sessionCountEl = document.getElementById('sessionCount');
+        const notification = document.getElementById('notification');
+        const notificationIcon = document.getElementById('notificationIcon');
+        const notificationText = document.getElementById('notificationText');
+
+        function init() {
+            sessionCountEl.textContent = sessionCount;
+            updateDisplay();
+            updateProgress();
+            
+            // PWA install prompt
+            let deferredPrompt;
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                document.getElementById('installBanner').classList.add('show');
+                
+                document.getElementById('installBtn').addEventListener('click', () => {
+                    deferredPrompt.prompt();
+                    deferredPrompt.userChoice.then(() => {
+                        document.getElementById('installBanner').classList.remove('show');
+                        deferredPrompt = null;
+                    });
+                });
+            });
+        }
+
+        function setTimerMode(mode) {
+            if (isRunning) return;
+            
+            timerMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === mode);
+            });
+            
+            resetTimer();
+        }
+
+        function toggleTimer() {
+            if (!isAudioUnlocked) {
+                unlockAudio();
+                return;
+            }
+            
+            if (isRunning) {
+                pauseTimer();
+            } else {
+                startTimer();
+            }
+        }
+
+        function startTimer() {
+            isRunning = true;
+            playIcon.style.display = 'none';
+            pauseIcon.style.display = 'block';
+            timerSubtitle.textContent = isWorkPhase ? '集中してください' : 'リラックスしてください';
+            
+            timerInterval = setInterval(() => {
+                timeRemaining--;
+                updateDisplay();
+                updateProgress();
+                
+                if (timeRemaining <= 0) {
+                    completePhase();
+                }
+            }, 1000);
+        }
+
+        function pauseTimer() {
+            isRunning = false;
+            clearInterval(timerInterval);
+            playIcon.style.display = 'block';
+            pauseIcon.style.display = 'none';
+            timerSubtitle.textContent = '一時停止中';
+        }
+
+        function resetTimer() {
+            pauseTimer();
+            isWorkPhase = true;
+            const duration = DURATIONS[timerMode];
+            timeRemaining = duration.work * 60;
+            totalTime = duration.work * 60;
+            
+            updateDisplay();
+            updateProgress();
+            updatePhaseUI();
+            timerSubtitle.textContent = 'スタートを押して開始';
+        }
+
+        function skipPhase() {
+            completePhase();
+        }
+
+        function completePhase() {
+            clearInterval(timerInterval);
+            isRunning = false;
+            playIcon.style.display = 'block';
+            pauseIcon.style.display = 'none';
+            
+            playNotificationSound();
+            
+            if (isWorkPhase) {
+                sessionCount++;
+                localStorage.setItem('pomodoroSessions', sessionCount);
+                sessionCountEl.textContent = sessionCount;
+                showNotification('作業完了！', '休憩を取りましょう', 'work');
+                sendBrowserNotification('作業セッション完了！', '休憩を取りましょう 🎉');
+                
+                isWorkPhase = false;
+                const duration = DURATIONS[timerMode];
+                timeRemaining = duration.break * 60;
+                totalTime = duration.break * 60;
+            } else {
+                showNotification('休憩終了！', '次のセッションを始めましょう', 'break');
+                sendBrowserNotification('休憩終了！', '次のセッションを始めましょう 💪');
+                
+                isWorkPhase = true;
+                const duration = DURATIONS[timerMode];
+                timeRemaining = duration.work * 60;
+                totalTime = duration.work * 60;
+            }
+            
+            updateDisplay();
+            updateProgress();
+            updatePhaseUI();
+            updateSoundCardStyles();
+            timerSubtitle.textContent = 'スタートを押して開始';
+        }
+
+        function updateDisplay() {
+            const minutes = Math.floor(timeRemaining / 60);
+            const seconds = timeRemaining % 60;
+            timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        function updateProgress() {
+            const circumference = 2 * Math.PI * 120; // ~754
+            const progress = timeRemaining / totalTime;
+            const offset = circumference * (1 - progress);
+            progressCircle.style.strokeDashoffset = offset;
+        }
+
+        function updatePhaseUI() {
+            if (isWorkPhase) {
+                timerPhase.textContent = '作業';
+                timerRing.classList.remove('break');
+                mainBtn.classList.remove('break-mode');
+            } else {
+                timerPhase.textContent = '休憩';
+                timerRing.classList.add('break');
+                mainBtn.classList.add('break-mode');
+            }
+        }
+
+        function showNotification(title, text, type) {
+            notificationIcon.className = 'notification-icon ' + type;
+            notificationText.textContent = `${title} ${text}`;
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 4000);
+        }
+
+        function sendBrowserNotification(title, body) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification(title, {
+                    body: body,
+                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🍅</text></svg>'
+                });
+            }
+        }
+
+        function playNotificationSound() {
+            if (!audioContext) return;
+            
+            const playBeep = (freq, startTime, duration) => {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = freq;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, startTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+                
+                oscillator.start(startTime);
+                oscillator.stop(startTime + duration);
+            };
+            
+            const now = audioContext.currentTime;
+            playBeep(880, now, 0.15);
+            playBeep(988, now + 0.15, 0.15);
+            playBeep(1047, now + 0.3, 0.3);
+        }
+
+        function dismissInstall() {
+            document.getElementById('installBanner').classList.remove('show');
+        }
+
+        // Initialize
+        init();
+
+        // Wake lock for mobile
+        let wakeLock = null;
+        
+        async function requestWakeLock() {
+            if ('wakeLock' in navigator) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                } catch (err) {
+                    console.log('Wake Lock error:', err);
+                }
+            }
+        }
+
+        function releaseWakeLock() {
+            if (wakeLock) {
+                wakeLock.release();
+                wakeLock = null;
+            }
+        }
+
+        const originalStartTimer = startTimer;
+        startTimer = function() {
+            requestWakeLock();
+            originalStartTimer();
+        };
+
+        const originalPauseTimer = pauseTimer;
+        pauseTimer = function() {
+            releaseWakeLock();
+            originalPauseTimer();
+        };
+    </script>
+</body>
+</html>
